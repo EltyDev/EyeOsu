@@ -6,40 +6,35 @@ import threading
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
+
 output_frame = None
 frame_lock = threading.Lock()
 
 
 def process_gesture(result, image, timestamp):
     global output_frame
-    rgb_image = image.numpy_view().copy()
-    if result.hand_landmarks:
-        for landmarks in result.hand_landmarks:
-            for lm in landmarks:
-                x = int(lm.x * rgb_image.shape[1])
-                y = int(lm.y * rgb_image.shape[0])
-                cv.circle(rgb_image, (x, y), 4, (0, 255, 0), -1)
-    if result.gestures:
-        gesture = result.gestures[0][0]
-        gesture_text = f"Gesture: {gesture.category_name}"
-        cv.putText(rgb_image, gesture_text, (10, 30),
-                   cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv.LINE_AA)
-    bgr_image = cv.cvtColor(rgb_image, cv.COLOR_RGB2BGR)
-    with frame_lock:
-        output_frame = bgr_image
+    hand_landmarks_list = result.hand_landmarks
+    annotated_image = image.numpy_view().copy()
+    height, width, _ = annotated_image.shape
+    for idx in range(len(hand_landmarks_list)):
+        hand_landmarks = hand_landmarks_list[idx]
+        x_coords = [lm.x for lm in hand_landmarks]
+        y_coords = [lm.y for lm in hand_landmarks]
+        x = int((max(x_coords) + min(x_coords)) / 2 * width)
+        y = int((max(y_coords) + min(y_coords)) / 2 * height)
 
 
 if __name__ == "__main__":
     base_options = python.BaseOptions(
-        model_asset_path="tasks/gesture_recognizer.task"
+        model_asset_path="tasks/hand_landmarker.task"
     )
-    options = vision.GestureRecognizerOptions(
+    options = vision.HandLandmarkerOptions(
         base_options=base_options,
-        num_hands=1,
+        num_hands=2,
         running_mode=vision.RunningMode.LIVE_STREAM,
         result_callback=process_gesture
     )
-    recognizer = vision.GestureRecognizer.create_from_options(options)
+    recognizer = vision.HandLandmarker.create_from_options(options)
     camera = cv.VideoCapture(0)
     if not camera.isOpened():
         raise RuntimeError("Could not open camera.")
@@ -52,7 +47,7 @@ if __name__ == "__main__":
             continue
         image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image)
-        recognizer.recognize_async(
+        recognizer.detect_async(
             mp_image,
             int((time.time() - start_time) * 1000)
         )
@@ -61,9 +56,4 @@ if __name__ == "__main__":
                 frame_to_show = output_frame.copy()
             else:
                 frame_to_show = None
-        if frame_to_show is not None:
-            cv.imshow("Gesture Recognition", frame_to_show)
-        if cv.waitKey(5) & 0xFF == 27:
-            break
     camera.release()
-    cv.destroyAllWindows()
