@@ -3,6 +3,8 @@ import cv2 as cv
 import time
 import threading
 
+from game.game import Game
+
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
@@ -25,6 +27,7 @@ def process_gesture(result, image, timestamp):
 
 
 if __name__ == "__main__":
+    Game().run()
     base_options = python.BaseOptions(
         model_asset_path="tasks/hand_landmarker.task"
     )
